@@ -10,6 +10,30 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "SpecGuard" }]
+dependencies = [
+    "click>=8.1",
+    "deepagents>=0.6,<1.0",
+    "langchain-core>=0.3,<2.0.0",
+    "langchain-openai>=0.2,<1.0",
+    "langgraph>=0.2,<2.0.0",
+    "pydantic>=2.6,<3.0",
+    "python-dotenv>=1.0",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.10",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+]
+anthropic = [
+    "langchain-anthropic>=0.2",
+]
+
+[project.scripts]
+specguard = "specguard.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/specguard"]
@@ -19,7 +43,6 @@ testpaths = ["tests"]
 addopts = "-ra"
 markers = ["integration: hits real LLM providers; requires API keys"]
 
-[dependency-groups]
-dev = [
-    "pytest>=9.0.3",
-]
+[tool.ruff]
+line-length = 100
+target-version = "py311"
