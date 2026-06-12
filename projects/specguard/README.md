@@ -1,14 +1,22 @@
 # SpecGuard AI
 
-An AI product-spec assistant that generates PRDs/BRDs/tech scopes and self-reviews them using rubric-based Deep Agent middleware.
+An AI product-spec assistant that generates PRDs/BRDs/tech scopes and self-reviews them using rubric-based Deep Agent middleware, plus a standards-driven LangChain pipeline for local Ollama.
 
 ## Quick start
 
 ```bash
-# one-time: install uv (https://docs.astral.sh/uv/)
 uv sync --extra dev
-cp .env.example .env      # add your OPENAI_API_KEY
-uv run specguard "Build an app for interior designers to manage quotation, billing, GST invoice, labour payments, and procurement." --mode prd
+ollama pull gemma3:4b
+uv run specguard models check
+uv run specguard generate "Build an app for interior designers to manage quotation, billing, GST invoice, labour payments, and procurement." --mode prd
 ```
 
-See `.hermes/plans/2026-06-12_073900-specguard-ai.md` for the full build plan.
+Set local defaults in `.env`:
+
+```env
+SPECGUARD_PROVIDER=ollama
+SPECGUARD_MODEL=gemma3:4b
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+See `.hermes/plans/2026-06-12_073900-specguard-ai.md` and `docs/superpowers/plans/2026-06-12-local-slm-specguard.md` for the build plans.
