@@ -37,6 +37,7 @@ specguard = "specguard.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/specguard"]
+artifacts = ["src/specguard/standards/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
