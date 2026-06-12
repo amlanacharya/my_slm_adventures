@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -136,10 +137,14 @@ def _message_content(message) -> str:
 def _write_output(request: GenerationRequest, markdown: str) -> Path:
     mode_dir = request.output_dir / request.mode
     mode_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{datetime.now().strftime('%Y-%m-%d-%H%M%S-%f')}-{_slugify(request.idea)}.md"
+    suffix = f"{datetime.now().strftime('%Y-%m-%d-%H%M%S-%f')}-{next(_OUTPUT_COUNTER):04d}"
+    filename = f"{suffix}-{_slugify(request.idea)}.md"
     path = mode_dir / filename
     path.write_text(markdown, encoding="utf-8")
     return path
+
+
+_OUTPUT_COUNTER = itertools.count()
 
 
 def _slugify(text: str) -> str:
