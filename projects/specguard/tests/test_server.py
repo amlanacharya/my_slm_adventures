@@ -52,12 +52,12 @@ def test_health_returns_ok(client):
 
 def test_settings_endpoint_returns_provider_and_model(client, monkeypatch):
     monkeypatch.setenv("SPECGUARD_PROVIDER", "ollama")
-    monkeypatch.setenv("SPECGUARD_MODEL", "gemma3:4b")
+    monkeypatch.setenv("SPECGUARD_MODEL", "gemma4:latest")
     r = client.get("/api/settings")
     assert r.status_code == 200
     body = r.json()
     assert body["provider"] == "ollama"
-    assert body["model"] == "gemma3:4b"
+    assert body["model"] == "gemma4:latest"
     assert "ollama_base_url" in body
     assert "has_openai_key" in body
     assert "has_anthropic_key" in body
@@ -139,9 +139,9 @@ def test_switching_provider_snaps_model_to_default(client, tmp_path):
         assert r.json()["model"] == "gpt-4.1-mini"
         r = client.post("/api/settings", json={"provider": "anthropic"})
         assert r.json()["model"] == "claude-3-5-haiku-latest"
-        # And ollama snaps back to gemma3:4b.
+        # And ollama snaps back to gemma4:latest.
         r = client.post("/api/settings", json={"provider": "ollama"})
-        assert r.json()["model"] == "gemma3:4b"
+        assert r.json()["model"] == "gemma4:latest"
     finally:
         if old is None:
             os.environ.pop("SPECGUARD_SETTINGS_FILE", None)

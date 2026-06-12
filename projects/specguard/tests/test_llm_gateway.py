@@ -7,7 +7,7 @@ from specguard.llm_gateway import build_chat_model
 def test_settings_defaults_to_ollama_gemma():
     settings = Settings.from_env({})
     assert settings.provider == "ollama"
-    assert settings.model == "gemma3:4b"
+    assert settings.model == "gemma4:latest"
     assert settings.ollama_base_url == "http://localhost:11434"
 
 

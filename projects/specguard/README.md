@@ -6,7 +6,7 @@ An AI product-spec assistant that generates PRDs/BRDs/tech scopes and self-revie
 
 ```bash
 uv sync --extra dev
-ollama pull gemma3:4b
+ollama pull gemma4:latest
 uv run specguard models check
 uv run specguard generate "Build an app for interior designers to manage quotation, billing, GST invoice, labour payments, and procurement." --mode prd
 ```

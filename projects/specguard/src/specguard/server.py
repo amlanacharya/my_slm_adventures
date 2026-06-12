@@ -265,7 +265,7 @@ def create_app(
             # the most common case), so we compute the provider-specific
             # default here by reading the env's per-provider override.
             default_model = "gpt-4.1-mini" if patch.provider == "openai" else (
-                "claude-3-5-haiku-latest" if patch.provider == "anthropic" else "gemma3:4b"
+                "claude-3-5-haiku-latest" if patch.provider == "anthropic" else "gemma4:latest"
             )
             current.model = default_model
         if patch.model is not None:

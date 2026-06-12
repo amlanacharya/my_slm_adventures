@@ -9,14 +9,14 @@ from specguard.validators import ValidationResult
 
 def test_models_check_prints_config(monkeypatch):
     monkeypatch.setenv("SPECGUARD_PROVIDER", "ollama")
-    monkeypatch.setenv("SPECGUARD_MODEL", "gemma3:4b")
+    monkeypatch.setenv("SPECGUARD_MODEL", "gemma4:latest")
     runner = CliRunner()
 
     result = runner.invoke(cli.main, ["models", "check"])
 
     assert result.exit_code == 0
     assert "provider: ollama" in result.output
-    assert "model: gemma3:4b" in result.output
+    assert "model: gemma4:latest" in result.output
 
 
 def test_generate_writes_output_with_fake_pipeline(monkeypatch, tmp_path: Path):

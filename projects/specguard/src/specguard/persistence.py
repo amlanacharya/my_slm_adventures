@@ -22,7 +22,7 @@ ENV_PATH = Path(".env")
 @dataclass
 class PersistedSettings:
     provider: str = "ollama"
-    model: str = "gemma3:4b"
+    model: str = "gemma4:latest"
     ollama_base_url: str = "http://localhost:11434"
     # API keys are *only* stored in .env. The settings.json knows which keys
     # are *set* (not the values) so the UI can show a filled/empty indicator.

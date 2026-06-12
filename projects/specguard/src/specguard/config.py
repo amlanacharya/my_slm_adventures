@@ -11,7 +11,7 @@ SUPPORTED_PROVIDERS = ("ollama", "openai", "anthropic")
 @dataclass(frozen=True)
 class Settings:
     provider: str = "ollama"
-    model: str = "gemma3:4b"
+    model: str = "gemma4:latest"
     ollama_base_url: str = "http://localhost:11434"
 
     @classmethod
@@ -21,7 +21,7 @@ class Settings:
         if provider not in SUPPORTED_PROVIDERS:
             raise ValueError(f"unknown provider {provider!r}; valid: {SUPPORTED_PROVIDERS}")
 
-        default_model = "gemma3:4b" if provider == "ollama" else "gpt-4.1-mini"
+        default_model = "gemma4:latest" if provider == "ollama" else "gpt-4.1-mini"
         return cls(
             provider=provider,
             model=source.get("SPECGUARD_MODEL", default_model),

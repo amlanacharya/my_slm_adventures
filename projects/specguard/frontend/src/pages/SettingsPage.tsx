@@ -4,7 +4,7 @@ import { api } from '../api';
 import type { Provider, ServerSettings } from '../types';
 
 const PROVIDER_MODELS: Record<Provider, string[]> = {
-  ollama: ['gemma3:4b', 'gemma3:12b', 'llama3.1:8b', 'qwen2.5:7b'],
+  ollama: ['gemma4:latest', 'gemma3:4b', 'gemma3:12b', 'llama3.1:8b', 'qwen2.5:7b'],
   openai: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini', 'o4-mini'],
   anthropic: ['claude-3-5-haiku-latest', 'claude-3-5-sonnet-latest', 'claude-sonnet-4-5'],
 };
