@@ -9,7 +9,7 @@ Builds a Deep Agent with:
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, cast
 
 from dotenv import load_dotenv
 
@@ -22,7 +22,7 @@ from .prompts.system import build_system_prompt  # noqa: E402
 from .rubrics import get_rubric  # noqa: E402
 from .tools.clarifier import get_clarifying_questions  # noqa: E402
 from .tools.domain_checklist import get_checklist  # noqa: E402
-from .tools.scope_estimator import estimate_scope  # noqa: E402
+from .tools.scope_estimator import ScopeEstimate, estimate_scope  # noqa: E402
 
 SUPPORTED_MODES = ("prd", "brd", "tech_scope")
 
@@ -39,7 +39,7 @@ def _checklist_tool(idea: str) -> list[str]:
     return get_checklist(idea)
 
 
-def _scope_tool(idea: str) -> dict[str, Any]:
+def _scope_tool(idea: str) -> ScopeEstimate:
     """Return a rough MVP scope estimate (size, team, weeks, risks)."""
     return estimate_scope(idea)
 
@@ -49,15 +49,19 @@ def build_agent(mode: str, model: str | None = None, grader_model: str | None = 
     if mode not in SUPPORTED_MODES:
         raise ValueError(f"unknown mode {mode!r}; valid: {SUPPORTED_MODES}")
 
-    writer_model = model or os.getenv("SPECGUARD_MODEL", DEFAULT_MODEL)
-    grader = grader_model or os.getenv("SPECGUARD_GRADER_MODEL", writer_model)
+    writer_model = model if model is not None else os.getenv("SPECGUARD_MODEL") or DEFAULT_MODEL
+    grader = (
+        grader_model
+        if grader_model is not None
+        else os.getenv("SPECGUARD_GRADER_MODEL") or writer_model
+    )
 
     return create_deep_agent(
         model=writer_model,
         system_prompt=build_system_prompt(mode),
         tools=[_clarifier_tool, _checklist_tool, _scope_tool],
         middleware=[
-            RubricMiddleware(model=grader, max_iterations=3),
+            cast(Any, RubricMiddleware(model=grader, max_iterations=3)),
         ],
         checkpointer=InMemorySaver(),
     )

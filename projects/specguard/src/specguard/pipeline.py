@@ -32,6 +32,15 @@ class GenerationResult:
     review: str
 
 
+class GenerationError(RuntimeError):
+    """Raised when the model cannot produce a valid document after revision."""
+
+    def __init__(self, validation: ValidationResult) -> None:
+        self.validation = validation
+        missing = ", ".join(validation.missing_sections)
+        super().__init__(f"generated document is missing required sections: {missing}")
+
+
 def generate_document(
     request: GenerationRequest,
     chat_model: ChatModel | None = None,
@@ -69,6 +78,9 @@ def generate_document(
         )
     )
     final_validation = validate_required_sections(final, REQUIRED_SECTIONS[request.mode])
+    if not final_validation.ok:
+        raise GenerationError(final_validation)
+
     output_path = _write_output(request, final)
     return GenerationResult(
         markdown=final,
@@ -124,7 +136,7 @@ def _message_content(message) -> str:
 def _write_output(request: GenerationRequest, markdown: str) -> Path:
     mode_dir = request.output_dir / request.mode
     mode_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{datetime.now().strftime('%Y-%m-%d')}-{_slugify(request.idea)}.md"
+    filename = f"{datetime.now().strftime('%Y-%m-%d-%H%M%S-%f')}-{_slugify(request.idea)}.md"
     path = mode_dir / filename
     path.write_text(markdown, encoding="utf-8")
     return path

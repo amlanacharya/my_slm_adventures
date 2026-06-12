@@ -6,7 +6,7 @@ from pathlib import Path
 import click
 
 from .config import Settings
-from .pipeline import GenerationRequest, generate_document
+from .pipeline import GenerationError, GenerationRequest, generate_document
 from .standards import REQUIRED_SECTIONS
 
 
@@ -21,7 +21,13 @@ def main() -> None:
 @click.option("--output-dir", type=click.Path(path_type=Path), default=Path("outputs"), show_default=True)
 def generate(idea: str, mode: str, output_dir: Path) -> None:
     """Generate a PRD, BRD, or technical scope."""
-    result = generate_document(GenerationRequest(idea=idea, mode=mode, output_dir=output_dir))
+    try:
+        result = generate_document(GenerationRequest(idea=idea, mode=mode, output_dir=output_dir))
+    except GenerationError as exc:
+        missing = ", ".join(exc.validation.missing_sections)
+        raise click.ClickException(
+            f"generation failed; missing required sections: {missing}"
+        ) from exc
     _print_result(result)
 
 

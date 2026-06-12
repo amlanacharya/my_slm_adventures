@@ -19,4 +19,4 @@ SPECGUARD_MODEL=gemma3:4b
 OLLAMA_BASE_URL=http://localhost:11434
 ```
 
-See `.hermes/plans/2026-06-12_073900-specguard-ai.md` and `docs/superpowers/plans/2026-06-12-local-slm-specguard.md` for the build plans.
+See `../../docs/superpowers/plans/2026-06-12-local-slm-specguard.md` for the implementation plan.
