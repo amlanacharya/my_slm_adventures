@@ -1,14 +1,15 @@
-# SpecGuard AI
+# my_slm_adventures
 
-An AI product-spec assistant that generates PRDs/BRDs/tech scopes and self-reviews them using rubric-based Deep Agent middleware.
+Local small-language-model experiments and tools.
 
-## Quick start
+## Projects
+
+- [SpecGuard](projects/specguard/README.md): LangChain-powered PRD, BRD, and technical-scope generator with local Ollama support.
+
+## Working With SpecGuard
 
 ```bash
-# one-time: install uv (https://docs.astral.sh/uv/)
+cd projects/specguard
 uv sync --extra dev
-cp .env.example .env      # add your OPENAI_API_KEY
-uv run specguard "Build an app for interior designers to manage quotation, billing, GST invoice, labour payments, and procurement." --mode prd
+uv run specguard generate "Build an app for interior designers..." --mode prd
 ```
-
-See `.hermes/plans/2026-06-12_073900-specguard-ai.md` for the full build plan.
