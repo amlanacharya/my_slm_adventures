@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "specguard-ai"
+version = "0.1.0"
+description = "Rubric-guided PRD/BRD/Tech-Scope agent built on LangChain Deep Agents."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "SpecGuard" }]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/specguard"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = ["integration: hits real LLM providers; requires API keys"]
