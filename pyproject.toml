@@ -18,3 +18,8 @@ packages = ["src/specguard"]
 testpaths = ["tests"]
 addopts = "-ra"
 markers = ["integration: hits real LLM providers; requires API keys"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
