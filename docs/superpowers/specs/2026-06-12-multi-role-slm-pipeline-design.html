@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecGuard — Multi-Role SLM Pipeline Design</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #181b24;
+    --panel2: #1f2330;
+    --border: #2c3140;
+    --text: #e6e9f0;
+    --muted: #9aa3b5;
+    --accent: #5eead4;
+    --planner: #7dd3fc;
+    --writer: #fbbf24;
+    --critic: #f472b6;
+    --router: #a78bfa;
+    --ok: #4ade80;
+    --warn: #fb923c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2.5rem 1.5rem 4rem;
+    background: var(--bg); color: var(--text);
+    font: 16px/1.6 "Segoe UI", system-ui, sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 1.9rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.3rem; margin: 2.5rem 0 .75rem; color: var(--accent); }
+  .sub { color: var(--muted); margin-bottom: 2rem; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.1rem 1.3rem; margin: .8rem 0;
+  }
+  .roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: .8rem; }
+  .role { border-top: 3px solid var(--border); }
+  .role h3 { margin: .1rem 0 .4rem; font-size: 1.05rem; }
+  .role p { margin: .3rem 0; font-size: .92rem; color: var(--muted); }
+  .role .tag { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+  .planner { border-top-color: var(--planner); } .planner .tag, .planner h3 { color: var(--planner); }
+  .writer  { border-top-color: var(--writer); }  .writer .tag,  .writer h3  { color: var(--writer); }
+  .critic  { border-top-color: var(--critic); }  .critic .tag,  .critic h3  { color: var(--critic); }
+  .router  { border-top-color: var(--router); }  .router .tag,  .router h3  { color: var(--router); }
+  pre {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1rem 1.2rem; overflow-x: auto; font-size: .85rem; line-height: 1.5;
+    color: var(--text);
+  }
+  code { font-family: Consolas, "Cascadia Code", monospace; }
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+  th, td { text-align: left; padding: .5rem .7rem; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: .82rem; text-transform: uppercase; letter-spacing: .05em; }
+  .pill {
+    display: inline-block; padding: .1rem .6rem; border-radius: 99px;
+    font-size: .78rem; font-weight: 600;
+  }
+  .pill.ok { background: rgba(74,222,128,.12); color: var(--ok); }
+  .pill.warn { background: rgba(251,146,60,.12); color: var(--warn); }
+  .pill.info { background: rgba(125,211,252,.12); color: var(--planner); }
+  .flow {
+    display: flex; flex-direction: column; gap: .35rem; align-items: center;
+    padding: 1.4rem 1rem;
+  }
+  .flow .node {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+    padding: .5rem 1.2rem; min-width: 320px; text-align: center; font-size: .92rem;
+  }
+  .flow .node strong { display: block; font-size: .98rem; }
+  .flow .node small { color: var(--muted); }
+  .flow .arrow { color: var(--muted); font-size: 1.05rem; line-height: 1; }
+  .flow .loop {
+    border: 1px dashed var(--router); border-radius: 10px; padding: .8rem;
+    display: flex; flex-direction: column; gap: .35rem; align-items: center;
+  }
+  .flow .loop-label { color: var(--router); font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; }
+  .split { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; margin-top: .35rem; }
+  .split .node { min-width: 220px; }
+  .b-planner { border-left: 3px solid var(--planner); }
+  .b-writer  { border-left: 3px solid var(--writer); }
+  .b-critic  { border-left: 3px solid var(--critic); }
+  .b-router  { border-left: 3px solid var(--router); }
+  .scope { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+  @media (max-width: 700px) { .scope { grid-template-columns: 1fr; } }
+  ul { margin: .4rem 0; padding-left: 1.2rem; }
+  li { margin: .25rem 0; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Multi-Role SLM Pipeline</h1>
+  <p class="sub">SpecGuard design &middot; 2026-06-12 &middot; first slice of the SLM-first agentic harness.
+  The harness — not the model — is the product; each SLM is a replaceable worker inside it.</p>
+
+  <h2>Scope</h2>
+  <div class="scope">
+    <div class="card">
+      <strong style="color:var(--ok)">In this slice</strong>
+      <ul>
+        <li>Planner / Writer / Critic role modules</li>
+        <li>Deterministic Router with retry budget (default 3)</li>
+        <li>Scored rubric JSON from the Critic, tolerant parsing</li>
+        <li>Per-role model config with shared default (gemma4 / Ollama)</li>
+        <li>New pipeline events: <code>plan</code>, <code>attempt</code>, <code>critique</code></li>
+        <li>Draft-with-warnings degradation instead of hard failure</li>
+      </ul>
+    </div>
+    <div class="card">
+      <strong style="color:var(--warn)">Later slices</strong>
+      <ul>
+        <li>Memory/state store across sessions</li>
+        <li>Policy / approval layer</li>
+        <li>Eval harness (fixed prompts, regression scoring)</li>
+        <li>Retiring <code>agent.py</code></li>
+        <li>Ask-user interrupts when the loop is stuck</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Roles</h2>
+  <div class="roles">
+    <div class="card role planner">
+      <span class="tag">SLM &times;1 + tools</span>
+      <h3>Planner</h3>
+      <p>Runs <code>clarifier</code>, <code>domain_checklist</code>, <code>scope_estimator</code> as plain Python (no tool-calling protocol), then one SLM call to synthesize a <strong>writing brief</strong>: assumptions, inferred answers, per-section guidance.</p>
+    </div>
+    <div class="card role writer">
+      <span class="tag">SLM per attempt</span>
+      <h3>Writer</h3>
+      <p>Drafts from idea + brief + mode standard. Same role handles revisions — the revision prompt carries critic findings and missing-section list.</p>
+    </div>
+    <div class="card role critic">
+      <span class="tag">SLM per attempt</span>
+      <h3>Critic</h3>
+      <p>Returns scored rubric JSON: per-criterion <code>{id, score 0–2, reason}</code>, overall verdict, free-text notes for the Writer. Rubrics restructured from <code>rubrics.py</code>.</p>
+    </div>
+    <div class="card role router">
+      <span class="tag">Pure Python — no SLM</span>
+      <h3>Router</h3>
+      <p><code>decide(validation, verdict, attempt, budget)</code> → <em>finalize</em> / <em>revise</em> / <em>degrade</em>. Combines deterministic validators with the critic verdict. Never silently blocks output.</p>
+    </div>
+  </div>
+
+  <h2>Data flow</h2>
+  <div class="card flow">
+    <div class="node"><strong>Idea</strong><small>user input + mode (prd / brd / tech_scope)</small></div>
+    <div class="arrow">&#9660;</div>
+    <div class="node b-planner"><strong>Planner</strong><small>deterministic tools → 1 SLM call → writing brief</small></div>
+    <div class="arrow">&#9660;</div>
+    <div class="loop">
+      <span class="loop-label">retry loop &middot; attempt &le; budget (default 3)</span>
+      <div class="node b-writer"><strong>Writer</strong><small>draft (or revise with critic findings)</small></div>
+      <div class="arrow">&#9660;</div>
+      <div class="split">
+        <div class="node"><strong>Validators</strong><small>required sections — deterministic</small></div>
+        <div class="node b-critic"><strong>Critic</strong><small>scored rubric JSON</small></div>
+      </div>
+      <div class="arrow">&#9660;</div>
+      <div class="node b-router"><strong>Router</strong><small>finalize &middot; revise &middot; degrade</small></div>
+    </div>
+    <div class="arrow">&#9660;</div>
+    <div class="node"><strong>Save</strong><small><span class="pill ok">finalized</span>&nbsp; or &nbsp;<span class="pill warn">draft-with-warnings</span> — file always written</small></div>
+  </div>
+
+  <h2>Critic JSON robustness</h2>
+  <div class="card">
+    <ol>
+      <li><strong>Tolerant extraction</strong> — strip code fences, locate the first <code>{...}</code> object, <code>json.loads</code>.</li>
+      <li><strong>Retry once</strong> on parse failure.</li>
+      <li><strong>Fallback</strong> — validator-only gating for that iteration, recorded as <code>critique</code> event with <span class="pill info">fallback: true</span>.</li>
+    </ol>
+    <p class="muted">The loop never dies because the critic emitted bad JSON.</p>
+  </div>
+
+  <h2>Module layout</h2>
+  <pre><code>specguard/
+  pipeline.py        # orchestrator; public contract unchanged
+  router.py          # pure decision function
+  roles/
+    planner.py       # plan(model, idea, mode, standard) -> Brief
+    writer.py        # draft(...) -> str, revise(...) -> str
+    critic.py        # critique(model, mode, draft) -> CriticVerdict
+  rubrics.py         # + get_rubric_criteria(mode)
+  config.py          # + per-role model fields</code></pre>
+
+  <h2>Configuration</h2>
+  <div class="card">
+    <table>
+      <tr><th>Field</th><th>Env var</th><th>Default</th></tr>
+      <tr><td><code>planner_model</code></td><td><code>SPECGUARD_PLANNER_MODEL</code></td><td><code>SPECGUARD_MODEL</code></td></tr>
+      <tr><td><code>writer_model</code></td><td><code>SPECGUARD_WRITER_MODEL</code></td><td><code>SPECGUARD_MODEL</code></td></tr>
+      <tr><td><code>critic_model</code></td><td><code>SPECGUARD_CRITIC_MODEL</code></td><td><code>SPECGUARD_MODEL</code></td></tr>
+      <tr><td><code>max_attempts</code></td><td><code>SPECGUARD_MAX_ATTEMPTS</code></td><td><code>3</code></td></tr>
+    </table>
+  </div>
+
+  <h2>Testing</h2>
+  <div class="card">
+    <ul>
+      <li>Router decision table — pure unit tests.</li>
+      <li>Critic JSON extraction — fenced JSON, prefixed prose, garbage input.</li>
+      <li>Full loop with fake <code>ChatModel</code>: pass first try &middot; pass after retry &middot; budget exhausted → degraded save &middot; critic garbage ×2 → fallback recorded.</li>
+      <li>Existing CLI/server tests keep passing (public contract unchanged).</li>
+    </ul>
+  </div>
+
+  <h2>Decision log</h2>
+  <div class="card">
+    <table>
+      <tr><th>Decision</th><th>Choice</th><th>Why</th></tr>
+      <tr><td>First slice of SLM-OS</td><td>Multi-role pipeline</td><td>Core thesis; builds on existing loop</td></tr>
+      <tr><td>Models per role</td><td>Same model, per-role config slots</td><td>Cheapest; validates harness before heterogeneity</td></tr>
+      <tr><td>Router behavior</td><td>Retry budget, degrade not block</td><td>Never silently blocks output with weak SLMs</td></tr>
+      <tr><td>Critic output</td><td>Scored rubric JSON + notes</td><td>Actionable for Router; trend data for future evals</td></tr>
+      <tr><td>Placement</td><td>Replace <code>pipeline.py</code> internals</td><td>One code path; UI gets richer events free</td></tr>
+      <tr><td>Planner job</td><td>Brief + deterministic tool synthesis</td><td>Grounds drafts; avoids flaky tool-calling protocol</td></tr>
+    </table>
+  </div>
+</main>
+</body>
+</html>
