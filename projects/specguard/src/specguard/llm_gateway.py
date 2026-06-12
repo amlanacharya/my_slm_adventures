@@ -24,6 +24,6 @@ def build_chat_model(settings: Settings | None = None) -> BaseChatModel:
         except ImportError as exc:
             raise RuntimeError("install the anthropic extra to use SPECGUARD_PROVIDER=anthropic") from exc
 
-        return ChatAnthropic(model=resolved.model)
+        return ChatAnthropic(model=resolved.model)  # type: ignore[call-arg]
 
     raise ValueError(f"unknown provider {resolved.provider!r}; valid: {SUPPORTED_PROVIDERS}")
