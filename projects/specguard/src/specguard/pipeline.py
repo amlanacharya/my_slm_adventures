@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Iterator, Protocol
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -42,16 +42,74 @@ class GenerationError(RuntimeError):
         super().__init__(f"generated document is missing required sections: {missing}")
 
 
+@dataclass(frozen=True)
+class PipelineEvent:
+    """One step of the generation pipeline, yielded to consumers (SSE, tests)."""
+
+    kind: str  # "draft" | "validate" | "review" | "revise" | "save"
+    timestamp: str
+    tokens: int | None = None
+    validation: ValidationResult | None = None
+    review_notes: str | None = None
+    markdown: str | None = None
+    output_path: Path | None = None
+    error: str | None = None
+
+
+def _now() -> str:
+    return datetime.now().strftime("%H:%M:%S.%f")[:-3]
+
+
+def _estimate_tokens(text: str) -> int:
+    """Cheap token estimate: chars/4. Real model returns the real count, but for
+    streaming we surface an estimate to the UI immediately after each call."""
+    return max(1, len(text) // 4)
+
+
 def generate_document(
     request: GenerationRequest,
     chat_model: ChatModel | None = None,
 ) -> GenerationResult:
+    """Run the full pipeline and return the final result. Raises GenerationError on failure."""
+    final_event: PipelineEvent | None = None
+    error_event: PipelineEvent | None = None
+    for event in generate_document_stream(request, chat_model=chat_model):
+        if event.kind == "save":
+            final_event = event
+        if event.error:
+            error_event = event
+    if error_event is not None:
+        # Re-raise to match the legacy contract. ValidationError carries the result.
+        if final_event is not None and final_event.validation is not None:
+            raise GenerationError(final_event.validation)
+        raise GenerationError(
+            ValidationResult(ok=False, missing_sections=())
+        )
+    assert final_event is not None
+    assert final_event.validation is not None
+    assert final_event.output_path is not None
+    assert final_event.markdown is not None
+    return GenerationResult(
+        markdown=final_event.markdown,
+        output_path=final_event.output_path,
+        validation=final_event.validation,
+        review=error_event.review_notes if error_event else "",
+    )
+
+
+def generate_document_stream(
+    request: GenerationRequest,
+    chat_model: ChatModel | None = None,
+) -> Iterator[PipelineEvent]:
+    """Run the pipeline, yielding a PipelineEvent after each step."""
     if request.mode not in REQUIRED_SECTIONS:
         raise ValueError(f"unknown mode {request.mode!r}; valid: {tuple(REQUIRED_SECTIONS)}")
 
     model = chat_model or build_chat_model()
     standard = load_standard(request.mode)
-    draft = _message_content(
+
+    # 1. Draft
+    draft_text = _message_content(
         model.invoke(
             [
                 SystemMessage(content=_system_prompt(request.mode, standard)),
@@ -59,36 +117,79 @@ def generate_document(
             ]
         )
     )
+    yield PipelineEvent(
+        kind="draft",
+        timestamp=_now(),
+        tokens=_estimate_tokens(draft_text),
+    )
 
-    validation = validate_required_sections(draft, REQUIRED_SECTIONS[request.mode])
-    review = _message_content(
+    # 2. Validate draft
+    draft_validation = validate_required_sections(draft_text, REQUIRED_SECTIONS[request.mode])
+    yield PipelineEvent(
+        kind="validate",
+        timestamp=_now(),
+        validation=draft_validation,
+    )
+
+    # 3. Review
+    review_text = _message_content(
         model.invoke(
             [
                 SystemMessage(content="Review the document against the provided standard."),
-                HumanMessage(content=_review_prompt(request.mode, standard, draft, validation)),
+                HumanMessage(content=_review_prompt(request.mode, standard, draft_text, draft_validation)),
             ]
         )
     )
+    yield PipelineEvent(
+        kind="review",
+        timestamp=_now(),
+        review_notes=review_text,
+    )
 
-    final = _message_content(
+    # 4. Revise
+    final_text = _message_content(
         model.invoke(
             [
                 SystemMessage(content=_system_prompt(request.mode, standard)),
-                HumanMessage(content=_revision_prompt(request.idea, draft, review, validation)),
+                HumanMessage(content=_revision_prompt(request.idea, draft_text, review_text, draft_validation)),
             ]
         )
     )
-    final_validation = validate_required_sections(final, REQUIRED_SECTIONS[request.mode])
-    if not final_validation.ok:
-        raise GenerationError(final_validation)
-
-    output_path = _write_output(request, final)
-    return GenerationResult(
-        markdown=final,
-        output_path=output_path,
-        validation=final_validation,
-        review=review,
+    yield PipelineEvent(
+        kind="revise",
+        timestamp=_now(),
+        tokens=_estimate_tokens(final_text),
     )
+
+    # 5. Validate revision
+    final_validation = validate_required_sections(final_text, REQUIRED_SECTIONS[request.mode])
+    yield PipelineEvent(
+        kind="validate",
+        timestamp=_now(),
+        validation=final_validation,
+    )
+
+    if not final_validation.ok:
+        # Yield a final error event so the SSE consumer can surface the failure,
+        # then stop. generate_document will turn this into a GenerationError.
+        yield PipelineEvent(
+            kind="save",
+            timestamp=_now(),
+            validation=final_validation,
+            error="missing required sections",
+            review_notes=review_text,
+        )
+        return
+
+    output_path = _write_output(request, final_text)
+    yield PipelineEvent(
+        kind="save",
+        timestamp=_now(),
+        validation=final_validation,
+        markdown=final_text,
+        output_path=output_path,
+    )
+
 
 
 def _system_prompt(mode: str, standard: str) -> str:

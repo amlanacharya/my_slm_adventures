@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import webbrowser
 from pathlib import Path
 
 import click
@@ -59,3 +60,42 @@ def _compat_entry() -> None:
     if len(sys.argv) >= 2 and not sys.argv[1].startswith("-") and sys.argv[1] not in main.commands:
         sys.argv.insert(1, "generate")
     main()
+
+
+@main.command()
+@click.option("--host", default="127.0.0.1", show_default=True, help="Bind host.")
+@click.option("--port", default=8765, show_default=True, type=int, help="Bind port.")
+@click.option("--no-browser", is_flag=True, help="Don't open the browser automatically.")
+def serve(host: str, port: int, no_browser: bool) -> None:
+    """Start the local web UI (FastAPI + React)."""
+    import uvicorn
+
+    from .server import create_app
+
+    frontend_dist = Path(__file__).parent.parent.parent / "frontend" / "dist"
+    static_dir = frontend_dist if frontend_dist.exists() else None
+    if static_dir is None:
+        click.echo(
+            click.style(
+                "frontend not built — serving API only. Run "
+                "`cd projects/specguard/frontend && npm install && npm run build` "
+                "for the full UI.",
+                fg="yellow",
+            )
+        )
+    app = create_app(static_dir=static_dir)
+    url = f"http://{host}:{port}/"
+    click.echo(click.style(f"SpecGuard web UI: {url}", fg="green", bold=True))
+    click.echo("Press Ctrl+C to stop.")
+    if not no_browser and not _env_flag("SPECGUARD_NO_BROWSER"):
+        try:
+            webbrowser.open(url)
+        except Exception:  # pragma: no cover - best effort
+            pass
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+def _env_flag(name: str) -> bool:
+    import os
+
+    return os.environ.get(name, "").lower() in ("1", "true", "yes")

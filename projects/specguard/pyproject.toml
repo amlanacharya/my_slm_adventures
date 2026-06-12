@@ -13,6 +13,7 @@ authors = [{ name = "SpecGuard" }]
 dependencies = [
     "click>=8.1",
     "deepagents>=0.6,<1.0",
+    "fastapi>=0.115,<1.0",
     "langchain-core>=0.3,<2.0.0",
     "langchain-openai>=0.2,<1.0",
     "langchain-ollama>=0.2,<1.0",
@@ -20,6 +21,7 @@ dependencies = [
     "pydantic>=2.6,<3.0",
     "python-dotenv>=1.0",
     "rich>=13.7",
+    "uvicorn[standard]>=0.30,<1.0",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +33,9 @@ dev = [
 ]
 anthropic = [
     "langchain-anthropic>=0.2",
+]
+web = [
+    # Frontend dev tooling (npm-installed; this extras just documents intent).
 ]
 
 [project.scripts]

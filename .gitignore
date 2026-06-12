@@ -10,3 +10,19 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+
+# Frontend build artifacts (SpecGuard React UI)
+projects/specguard/frontend/dist/
+projects/specguard/frontend/node_modules/
+projects/specguard/frontend/*.tsbuildinfo
+projects/specguard/frontend/tsconfig.app.tsbuildinfo
+projects/specguard/frontend/tsconfig.node.tsbuildinfo
+
+# Runtime outputs (saved spec documents) and user settings
+projects/specguard/outputs/
+projects/specguard/settings.json
+projects/specguard/.env
+
+# Sketches
+sketches/
+
