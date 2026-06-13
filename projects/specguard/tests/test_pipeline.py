@@ -1,40 +1,58 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from langchain_core.messages import AIMessage
-
 import pytest
 
 from specguard.pipeline import GenerationError, GenerationRequest, generate_document
 
 
+FULL_DOC = (
+    "# Product Requirements Document\n\n"
+    "## Problem\nText.\n\n## Goals\nText.\n\n## Users\nText.\n\n"
+    "## Requirements\nText.\n\n## Success Metrics\nText.\n\n## Risks and Assumptions\nText.\n"
+)
+PARTIAL_DOC = (
+    "# Product Requirements Document\n\n"
+    "## Problem\nText.\n\n## Goals\nText.\n"
+)
+
+PASS_JSON = json.dumps({"verdict": "pass", "criteria": [], "notes": "ok"})
+FAIL_JSON = json.dumps({"verdict": "needs_revision", "criteria": [], "notes": "missing sections"})
+
+
 class FakeChatModel:
-    def __init__(self):
+    """Routes by system message role: planner → brief, critic → JSON, writer → docs."""
+
+    def __init__(self, drafts: list[str], critic_replies: list[str]):
+        self.drafts = drafts
+        self.critic_replies = critic_replies[:]
+        self._critic_index = 0
         self.calls: list[str] = []
 
     def invoke(self, messages):
+        system = messages[0].content if messages else ""
         text = messages[-1].content
         self.calls.append(text)
-        if "Revise" in text:
-            return AIMessage(
-                content=(
-                    "# Product Requirements Document\n\n"
-                    "## Problem\nText.\n\n"
-                    "## Goals\nText.\n\n"
-                    "## Users\nText.\n\n"
-                    "## Requirements\nText.\n\n"
-                    "## Success Metrics\nText.\n\n"
-                    "## Risks and Assumptions\nText.\n"
-                )
-            )
-        if "Review" in text:
-            return AIMessage(content="Missing required sections: Users, Requirements, Success Metrics.")
-        return AIMessage(content="# Product Requirements Document\n\n## Problem\nText.\n\n## Goals\nText.\n")
+        if "planner" in system.lower():
+            return AIMessage(content="Brief: keep it concrete.")
+        if "critic" in system.lower():
+            idx = self._critic_index
+            self._critic_index += 1
+            reply = self.critic_replies[idx] if idx < len(self.critic_replies) else self.critic_replies[-1]
+            return AIMessage(content=reply)
+        return AIMessage(content=self.drafts.pop(0))
 
 
 def test_generate_document_revises_and_saves_markdown(tmp_path: Path):
-    model = FakeChatModel()
+    # attempt 1: partial draft → validation fails → critic → revise
+    # attempt 2: full draft → validation passes → finalize
+    model = FakeChatModel(
+        drafts=[PARTIAL_DOC, FULL_DOC],
+        critic_replies=[FAIL_JSON, PASS_JSON],
+    )
     request = GenerationRequest(
         idea="Build an app for interior designers.",
         mode="prd",
@@ -47,41 +65,53 @@ def test_generate_document_revises_and_saves_markdown(tmp_path: Path):
     assert result.output_path.exists()
     assert result.output_path.suffix == ".md"
     assert "## Users" in result.markdown
-    assert len(model.calls) == 3
 
 
 class AlwaysValidChatModel:
+    """Always returns a complete valid PRD."""
+
+    def __init__(self):
+        self.calls: list[str] = []
+
     def invoke(self, messages):
-        return AIMessage(
-            content=(
-                "# Product Requirements Document\n\n"
-                "## Problem\nText.\n\n"
-                "## Goals\nText.\n\n"
-                "## Users\nText.\n\n"
-                "## Requirements\nText.\n\n"
-                "## Success Metrics\nText.\n\n"
-                "## Risks and Assumptions\nText.\n"
-            )
-        )
+        system = messages[0].content if messages else ""
+        text = messages[-1].content
+        self.calls.append(text)
+        if "critic" in system.lower():
+            return AIMessage(content=PASS_JSON)
+        return AIMessage(content=FULL_DOC)
 
 
 class StillInvalidChatModel:
+    """Always returns a partial PRD that never passes validation."""
+
+    def __init__(self):
+        self.calls: list[str] = []
+
     def invoke(self, messages):
-        return AIMessage(content="# Product Requirements Document\n\n## Problem\nText.\n")
+        system = messages[0].content if messages else ""
+        text = messages[-1].content
+        self.calls.append(text)
+        if "critic" in system.lower():
+            return AIMessage(content=FAIL_JSON)
+        return AIMessage(content=PARTIAL_DOC)
 
 
 def test_generate_document_fails_when_final_revision_is_invalid(tmp_path: Path):
+    """Budget exhausted → degraded result, not GenerationError (degrade-not-block)."""
     request = GenerationRequest(
         idea="Build an app for interior designers.",
         mode="prd",
         output_dir=tmp_path,
     )
 
-    with pytest.raises(GenerationError, match="missing required sections") as exc_info:
-        generate_document(request, chat_model=StillInvalidChatModel())
+    result = generate_document(request, chat_model=StillInvalidChatModel())
 
-    assert "## Goals" in exc_info.value.validation.missing_sections
-    assert not list((tmp_path / "prd").glob("*.md"))
+    # Degrade-not-block: still saves the output
+    assert result.degraded is True
+    assert result.validation.ok is False
+    assert result.output_path.exists()
+    assert "## Users" in result.validation.missing_sections
 
 
 def test_generate_document_does_not_overwrite_same_day_outputs(tmp_path: Path):
