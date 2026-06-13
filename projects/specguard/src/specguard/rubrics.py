@@ -6,6 +6,9 @@ middleware's grader interprets them.
 """
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
+
 PRD = """\
 Evaluate the PRD using this checklist:
 
@@ -68,6 +71,12 @@ class ModeError(ValueError):
     """Raised when an unknown mode is requested."""
 
 
+@dataclass(frozen=True)
+class RubricCriterion:
+    id: str
+    text: str
+
+
 def list_modes() -> list[str]:
     return list(_MODES.keys())
 
@@ -77,3 +86,14 @@ def get_rubric(mode: str) -> str:
         return _MODES[mode]
     except KeyError as exc:
         raise ModeError(f"unknown mode {mode!r}; valid: {list_modes()}") from exc
+
+
+def get_rubric_criteria(mode: str) -> tuple[RubricCriterion, ...]:
+    rubric = get_rubric(mode)
+    criteria: list[RubricCriterion] = []
+    for line in rubric.splitlines():
+        match = re.match(r"^(\d+)\.\s+(.*\S)\s*$", line.strip())
+        if match:
+            num = int(match.group(1))
+            criteria.append(RubricCriterion(id=f"{mode}-{num}", text=match.group(2)))
+    return tuple(criteria)
