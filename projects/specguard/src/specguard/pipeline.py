@@ -7,9 +7,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Protocol
 
-from langchain_core.messages import HumanMessage, SystemMessage
-
+from .config import Settings
 from .llm_gateway import build_chat_model
+from .roles.critic import CriticVerdict, critique
+from .roles.planner import Brief, plan
+from .roles.writer import draft as write_draft, revise as write_revision
+from .router import decide
 from .standards import REQUIRED_SECTIONS, load_standard
 from .validators import ValidationResult, validate_required_sections
 
@@ -31,10 +34,11 @@ class GenerationResult:
     output_path: Path
     validation: ValidationResult
     review: str
+    degraded: bool = False
 
 
 class GenerationError(RuntimeError):
-    """Raised when the model cannot produce a valid document after revision."""
+    """Raised when the pipeline cannot produce any document at all."""
 
     def __init__(self, validation: ValidationResult) -> None:
         self.validation = validation
@@ -46,7 +50,7 @@ class GenerationError(RuntimeError):
 class PipelineEvent:
     """One step of the generation pipeline, yielded to consumers (SSE, tests)."""
 
-    kind: str  # "draft" | "validate" | "review" | "revise" | "save"
+    kind: str  # "plan" | "attempt" | "draft" | "revise" | "validate" | "critique" | "save"
     timestamp: str
     tokens: int | None = None
     validation: ValidationResult | None = None
@@ -54,6 +58,10 @@ class PipelineEvent:
     markdown: str | None = None
     output_path: Path | None = None
     error: str | None = None
+    attempt: int | None = None
+    budget: int | None = None
+    critic: CriticVerdict | None = None
+    degraded: bool = False
 
 
 def _now() -> str:
@@ -61,8 +69,7 @@ def _now() -> str:
 
 
 def _estimate_tokens(text: str) -> int:
-    """Cheap token estimate: chars/4. Real model returns the real count, but for
-    streaming we surface an estimate to the UI immediately after each call."""
+    """Cheap token estimate: chars/4. Surfaced to the UI immediately after each call."""
     return max(1, len(text) // 4)
 
 
@@ -70,30 +77,28 @@ def generate_document(
     request: GenerationRequest,
     chat_model: ChatModel | None = None,
 ) -> GenerationResult:
-    """Run the full pipeline and return the final result. Raises GenerationError on failure."""
+    """Run the full pipeline and return the final result.
+
+    A degraded result (budget exhausted) is still returned, with degraded=True.
+    GenerationError is reserved for the pipeline producing no document at all.
+    """
     final_event: PipelineEvent | None = None
-    error_event: PipelineEvent | None = None
+    last_notes = ""
     for event in generate_document_stream(request, chat_model=chat_model):
+        if event.kind == "critique" and event.review_notes:
+            last_notes = event.review_notes
         if event.kind == "save":
             final_event = event
-        if event.error:
-            error_event = event
-    if error_event is not None:
-        # Re-raise to match the legacy contract. ValidationError carries the result.
-        if final_event is not None and final_event.validation is not None:
-            raise GenerationError(final_event.validation)
-        raise GenerationError(
-            ValidationResult(ok=False, missing_sections=())
-        )
-    assert final_event is not None
+    if final_event is None or final_event.output_path is None:
+        raise GenerationError(ValidationResult(ok=False, missing_sections=()))
     assert final_event.validation is not None
-    assert final_event.output_path is not None
     assert final_event.markdown is not None
     return GenerationResult(
         markdown=final_event.markdown,
         output_path=final_event.output_path,
         validation=final_event.validation,
-        review=error_event.review_notes if error_event else "",
+        review=last_notes,
+        degraded=final_event.degraded,
     )
 
 
@@ -101,138 +106,125 @@ def generate_document_stream(
     request: GenerationRequest,
     chat_model: ChatModel | None = None,
 ) -> Iterator[PipelineEvent]:
-    """Run the pipeline, yielding a PipelineEvent after each step."""
+    """Run the multi-role loop, yielding a PipelineEvent after each step.
+
+    `chat_model`, when given (tests, server), is used for every role. Otherwise
+    each role gets its configured model from Settings.
+    """
     if request.mode not in REQUIRED_SECTIONS:
         raise ValueError(f"unknown mode {request.mode!r}; valid: {tuple(REQUIRED_SECTIONS)}")
 
-    model = chat_model or build_chat_model()
+    settings = Settings.from_env()
+    if chat_model is not None:
+        planner_model = writer_model = critic_model = chat_model
+    else:
+        cache: dict[str, ChatModel] = {}
+
+        def _model_for(name: str) -> ChatModel:
+            if name not in cache:
+                cache[name] = build_chat_model(settings, model=name)
+            return cache[name]
+
+        planner_model = _model_for(settings.planner_model)
+        writer_model = _model_for(settings.writer_model)
+        critic_model = _model_for(settings.critic_model)
+
     standard = load_standard(request.mode)
+    budget = settings.max_attempts
 
-    # 1. Draft
-    draft_text = _message_content(
-        model.invoke(
-            [
-                SystemMessage(content=_system_prompt(request.mode, standard)),
-                HumanMessage(content=f"Generate the document for this idea:\n\n{request.idea}"),
-            ]
-        )
-    )
+    # ── Planner ────────────────────────────────────────────────────────────────
+    brief: Brief = plan(planner_model, request.idea, request.mode, standard)
     yield PipelineEvent(
-        kind="draft",
+        kind="plan",
         timestamp=_now(),
-        tokens=_estimate_tokens(draft_text),
+        review_notes=brief.guidance,
     )
 
-    # 2. Validate draft
-    draft_validation = validate_required_sections(draft_text, REQUIRED_SECTIONS[request.mode])
-    yield PipelineEvent(
-        kind="validate",
-        timestamp=_now(),
-        validation=draft_validation,
-    )
+    # ── Retry loop ─────────────────────────────────────────────────────────────
+    draft_text = ""
+    last_critic_notes = ""
+    last_missing: tuple[str, ...] = ()
+    for attempt in range(1, budget + 1):
+        yield PipelineEvent(kind="attempt", timestamp=_now(), attempt=attempt, budget=budget)
 
-    # 3. Review
-    review_text = _message_content(
-        model.invoke(
-            [
-                SystemMessage(content="Review the document against the provided standard."),
-                HumanMessage(content=_review_prompt(request.mode, standard, draft_text, draft_validation)),
-            ]
-        )
-    )
-    yield PipelineEvent(
-        kind="review",
-        timestamp=_now(),
-        review_notes=review_text,
-    )
+        # Writer
+        is_revise = attempt > 1
+        if is_revise:
+            draft_text = write_revision(
+                writer_model,
+                request.idea,
+                request.mode,
+                standard,
+                brief,
+                draft_text,
+                critic_notes=last_critic_notes,
+                missing_sections=last_missing,
+            )
+        else:
+            draft_text = write_draft(writer_model, request.idea, request.mode, standard, brief)
 
-    # 4. Revise
-    final_text = _message_content(
-        model.invoke(
-            [
-                SystemMessage(content=_system_prompt(request.mode, standard)),
-                HumanMessage(content=_revision_prompt(request.idea, draft_text, review_text, draft_validation)),
-            ]
-        )
-    )
-    yield PipelineEvent(
-        kind="revise",
-        timestamp=_now(),
-        tokens=_estimate_tokens(final_text),
-    )
-
-    # 5. Validate revision
-    final_validation = validate_required_sections(final_text, REQUIRED_SECTIONS[request.mode])
-    yield PipelineEvent(
-        kind="validate",
-        timestamp=_now(),
-        validation=final_validation,
-    )
-
-    if not final_validation.ok:
-        # Yield a final error event so the SSE consumer can surface the failure,
-        # then stop. generate_document will turn this into a GenerationError.
         yield PipelineEvent(
-            kind="save",
+            kind="revise" if is_revise else "draft",
             timestamp=_now(),
-            validation=final_validation,
-            error="missing required sections",
-            review_notes=review_text,
+            tokens=_estimate_tokens(draft_text),
+            markdown=draft_text,
         )
-        return
 
-    output_path = _write_output(request, final_text)
+        # Validate
+        required = REQUIRED_SECTIONS[request.mode]
+        validation = validate_required_sections(draft_text, required)
+        yield PipelineEvent(kind="validate", timestamp=_now(), validation=validation)
+
+        # Critic
+        critic_verdict = critique(
+            critic_model,
+            request.mode,
+            draft_text,
+            validator=lambda text, sections: validate_required_sections(text, sections),
+        )
+        yield PipelineEvent(
+            kind="critique",
+            timestamp=_now(),
+            review_notes=critic_verdict.notes,
+            critic=critic_verdict,
+        )
+
+        # Router decision
+        decision = decide(
+            validation_ok=validation.ok,
+            critic_passed=critic_verdict.passed,
+            attempt=attempt,
+            budget=budget,
+        )
+
+        if decision == "finalize":
+            output_path = _write_output(request, draft_text)
+            yield PipelineEvent(
+                kind="save",
+                timestamp=_now(),
+                validation=validation,
+                markdown=draft_text,
+                output_path=output_path,
+                critic=critic_verdict,
+            )
+            return
+
+        # Prepare revision context for next iteration
+        last_critic_notes = critic_verdict.notes
+        last_missing = validation.missing_sections
+
+    # Budget exhausted — degrade and save
+    output_path = _write_output(request, draft_text)
     yield PipelineEvent(
         kind="save",
         timestamp=_now(),
-        validation=final_validation,
-        markdown=final_text,
+        validation=validation,
+        markdown=draft_text,
         output_path=output_path,
+        critic=critic_verdict,
+        degraded=True,
+        error="budget exhausted",
     )
-
-
-
-def _system_prompt(mode: str, standard: str) -> str:
-    return (
-        f"You are SpecGuard. Generate a {mode} document in Markdown. "
-        "Follow the standard exactly and include every required section.\n\n"
-        f"{standard}"
-    )
-
-
-def _review_prompt(
-    mode: str,
-    standard: str,
-    draft: str,
-    validation: ValidationResult,
-) -> str:
-    missing = ", ".join(validation.missing_sections) if validation.missing_sections else "none"
-    return (
-        f"Review this {mode} draft against the standard.\n\n"
-        f"Missing required sections from validator: {missing}\n\n"
-        f"Standard:\n{standard}\n\nDraft:\n{draft}"
-    )
-
-
-def _revision_prompt(
-    idea: str,
-    draft: str,
-    review: str,
-    validation: ValidationResult,
-) -> str:
-    missing = ", ".join(validation.missing_sections) if validation.missing_sections else "none"
-    return (
-        "Revise the draft into final Markdown. Preserve useful content, fix the review findings, "
-        "and include all required sections.\n\n"
-        f"Idea:\n{idea}\n\nMissing sections:\n{missing}\n\nReview:\n{review}\n\nDraft:\n{draft}"
-    )
-
-
-def _message_content(message) -> str:
-    content = getattr(message, "content", message)
-    if isinstance(content, str):
-        return content
-    return str(content)
 
 
 def _write_output(request: GenerationRequest, markdown: str) -> Path:
