@@ -12,6 +12,10 @@ SUPPORTED_PROVIDERS = ("ollama", "openai", "anthropic")
 class Settings:
     provider: str = "ollama"
     model: str = "gemma4:latest"
+    planner_model: str = "gemma4:latest"
+    writer_model: str = "gemma4:latest"
+    critic_model: str = "gemma4:latest"
+    max_attempts: int = 3
     ollama_base_url: str = "http://localhost:11434"
 
     @classmethod
@@ -22,8 +26,16 @@ class Settings:
             raise ValueError(f"unknown provider {provider!r}; valid: {SUPPORTED_PROVIDERS}")
 
         default_model = "gemma4:latest" if provider == "ollama" else "gpt-4.1-mini"
+        model = source.get("SPECGUARD_MODEL", default_model)
+        try:
+            max_attempts = int(source.get("SPECGUARD_MAX_ATTEMPTS", "3"))
+        except ValueError:
+            max_attempts = 3
         return cls(
             provider=provider,
-            model=source.get("SPECGUARD_MODEL", default_model),
-            ollama_base_url=source.get("OLLAMA_BASE_URL", "http://localhost:11434"),
+            model=model,
+            planner_model=source.get("SPECGUARD_PLANNER_MODEL", model),
+            writer_model=source.get("SPECGUARD_WRITER_MODEL", model),
+            critic_model=source.get("SPECGUARD_CRITIC_MODEL", model),
+            max_attempts=max(1, max_attempts),
         )
