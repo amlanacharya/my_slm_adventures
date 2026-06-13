@@ -7,7 +7,7 @@
 //   `inline code`
 // We don't pull in a library to keep the bundle small.
 
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useMemo, type ReactNode } from 'react';
 
 type Block =
   | { kind: 'h1' | 'h2' | 'h3'; text: string }
@@ -16,7 +16,14 @@ type Block =
   | { kind: 'code'; text: string };
 
 function parse(markdown: string): Block[] {
-  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+  // Hard cap on the number of input lines we will walk. A reasonable LLM
+  // output is well under 1,000 lines; 50,000 is a generous safety net that
+  // prevents a runaway input (or a string in state that grew huge from a
+  // stream of events) from blowing the JS array-length limit and crashing
+  // the React reconciler.
+  const MAX_LINES = 50_000;
+  const raw = markdown.replace(/\r\n/g, '\n').split('\n');
+  const lines = raw.length > MAX_LINES ? raw.slice(0, MAX_LINES) : raw;
   const blocks: Block[] = [];
   let i = 0;
   while (i < lines.length) {
@@ -96,7 +103,17 @@ function renderInline(text: string): ReactNode {
 }
 
 export function MarkdownView({ markdown }: { markdown: string }) {
-  const blocks = parse(markdown);
+  // Memoize the parse so it only runs when the markdown string actually
+  // changes. Without this, every trace event arriving in the parent would
+  // re-parse the same document.
+  const blocks = useMemo(() => {
+    try {
+      return parse(markdown);
+    } catch (err) {
+      console.error('MarkdownView: parse failed', err);
+      return [{ kind: 'p', text: markdown } as Block];
+    }
+  }, [markdown]);
   return (
     <div className="md">
       {blocks.map((b, i) => {

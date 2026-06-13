@@ -37,7 +37,7 @@ export const api = {
     return jsonFetch('/settings', { method: 'POST', body: JSON.stringify(patch) });
   },
   setApiKey(
-    provider: 'openai' | 'anthropic',
+    provider: 'openai' | 'anthropic' | 'minimax',
     key: string,
     clear = false,
   ): Promise<{ ok: boolean; provider: string; configured: boolean }> {

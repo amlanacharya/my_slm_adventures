@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Protocol
 
 from langchain_core.messages import HumanMessage, SystemMessage
 

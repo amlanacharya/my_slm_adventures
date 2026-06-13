@@ -29,7 +29,7 @@ function summarizeEvent(ev: PipelineEvent): TraceRow | null {
   let msgMuted = false;
   let stepKind: TraceRow['stepKind'] = 'plain';
   if (ev.kind === 'draft' || ev.kind === 'revise') {
-    msg = `${ev.tokens ?? 0} tok · ollama / model`;
+    msg = `${ev.tokens ?? 0} tokens`;
     stepKind = 'plain';
   } else if (ev.kind === 'validate') {
     if (ev.validation.ok) {
@@ -40,7 +40,9 @@ function summarizeEvent(ev: PipelineEvent): TraceRow | null {
       stepKind = 'warn';
     }
   } else if (ev.kind === 'review') {
-    msg = ev.review_notes.length > 80 ? ev.review_notes.slice(0, 77) + '…' : ev.review_notes;
+    const truncated =
+      ev.review_notes.length > 200 ? ev.review_notes.slice(0, 197) + '…' : ev.review_notes;
+    msg = truncated;
     msgMuted = true;
     stepKind = 'warn';
   } else if (ev.kind === 'save') {
@@ -55,6 +57,12 @@ function summarizeEvent(ev: PipelineEvent): TraceRow | null {
   }
   return { ts: ev.timestamp ?? '', step, stepKind, msg, msgMuted };
 }
+
+// Hard cap on how many trace rows the UI keeps in memory. A 6-event pipeline
+// produces 6 rows; this cap only matters if the SSE stream somehow emits
+// thousands of events (which would itself be a server bug, but we'd rather
+// degrade gracefully than crash the page).
+const MAX_TRACE_ROWS = 200;
 
 export function GeneratePage() {
   const modesQuery = useQuery({ queryKey: ['modes'], queryFn: () => api.listModes() });
@@ -91,7 +99,10 @@ export function GeneratePage() {
         (ev) => {
           const row = summarizeEvent(ev);
           if (row) {
-            setTrace((t) => [...t, row]);
+            setTrace((t) => {
+              const next = t.length >= MAX_TRACE_ROWS ? t.slice(1) : t;
+              return [...next, row];
+            });
           }
           if (ev.kind === 'save') {
             if (ev.markdown) setFinalMarkdown(ev.markdown);
@@ -191,7 +202,7 @@ export function GeneratePage() {
             </div>
           )}
           {trace.map((row, i) => (
-            <div className="trace-line" key={i}>
+            <div className="trace-line" key={`${row.ts}-${row.step}-${i}`}>
               <span className="trace-ts">{row.ts}</span>
               <span className={`trace-step ${row.stepKind === 'plain' ? '' : row.stepKind}`}>
                 {row.step}

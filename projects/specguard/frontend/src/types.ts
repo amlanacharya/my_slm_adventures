@@ -1,21 +1,24 @@
 // TypeScript types mirroring the FastAPI pydantic models in src/specguard/server.py.
 // Keep these in sync when the API changes.
 
-export type Provider = 'ollama' | 'openai' | 'anthropic';
+export type Provider = 'ollama' | 'openai' | 'anthropic' | 'minimax';
 
 export interface ServerSettings {
   provider: Provider;
   model: string;
   ollama_base_url: string;
+  minimax_base_url: string;
   output_dir: string;
   has_openai_key: boolean;
   has_anthropic_key: boolean;
+  has_minimax_key: boolean;
 }
 
 export interface SettingsUpdate {
   provider?: Provider;
   model?: string;
   ollama_base_url?: string;
+  minimax_base_url?: string;
 }
 
 export interface ModeInfo {

@@ -7,13 +7,17 @@ const PROVIDER_MODELS: Record<Provider, string[]> = {
   ollama: ['gemma4:latest', 'gemma3:4b', 'gemma3:12b', 'llama3.1:8b', 'qwen2.5:7b'],
   openai: ['gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini', 'o4-mini'],
   anthropic: ['claude-3-5-haiku-latest', 'claude-3-5-sonnet-latest', 'claude-sonnet-4-5'],
+  minimax: ['MiniMax-M3'],
 };
 
-const CLOUD_PROVIDERS: Provider[] = ['openai', 'anthropic'];
+const CLOUD_PROVIDERS: Provider[] = ['openai', 'anthropic', 'minimax'];
 
-function cloudEnvVar(provider: Provider): 'OPENAI_API_KEY' | 'ANTHROPIC_API_KEY' | null {
+function cloudEnvVar(
+  provider: Provider,
+): 'OPENAI_API_KEY' | 'ANTHROPIC_API_KEY' | 'MINIMAX_API_KEY' | null {
   if (provider === 'openai') return 'OPENAI_API_KEY';
   if (provider === 'anthropic') return 'ANTHROPIC_API_KEY';
+  if (provider === 'minimax') return 'MINIMAX_API_KEY';
   return null;
 }
 
@@ -67,7 +71,7 @@ export function SettingsPage() {
           <h2>Provider</h2>
           <p className="hint">
             Where generation runs. <strong>Ollama</strong> is local and private. <strong>OpenAI</strong>{' '}
-            and <strong>Anthropic</strong> require API keys in <code>.env</code>.
+            <strong>Anthropic</strong>, and <strong>MiniMax</strong> require API keys in <code>.env</code>.
           </p>
           <div className="row">
             <label htmlFor="provider">Backend</label>
@@ -83,6 +87,7 @@ export function SettingsPage() {
               <option value="ollama">Ollama (local)</option>
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
+              <option value="minimax">MiniMax</option>
             </select>
           </div>
         </div>
@@ -125,6 +130,24 @@ export function SettingsPage() {
           </div>
         )}
 
+        {form.provider === 'minimax' && (
+          <div className="card">
+            <h2>MiniMax endpoint</h2>
+            <p className="hint">
+              OpenAI-compatible MiniMax API base URL. The default works for the global API.
+            </p>
+            <div className="row">
+              <label htmlFor="minimax-url">Base URL</label>
+              <input
+                id="minimax-url"
+                type="text"
+                value={form.minimax_base_url}
+                onChange={(e) => set('minimax_base_url', e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="card">
           <h2>Output</h2>
           <p className="hint">Where finished documents are saved on this machine.</p>
@@ -136,9 +159,13 @@ export function SettingsPage() {
 
         {CLOUD_PROVIDERS.includes(form.provider) && (
           <ApiKeyCard
-            provider={form.provider as 'openai' | 'anthropic'}
+            provider={form.provider as 'openai' | 'anthropic' | 'minimax'}
             configured={
-              form.provider === 'openai' ? form.has_openai_key : form.has_anthropic_key
+              form.provider === 'openai'
+                ? form.has_openai_key
+                : form.provider === 'anthropic'
+                  ? form.has_anthropic_key
+                  : form.has_minimax_key
             }
             onSaved={() => {
               queryClient.invalidateQueries({ queryKey: ['settings'] });
@@ -154,6 +181,7 @@ export function SettingsPage() {
               provider: form.provider,
               model: form.model,
               ollama_base_url: form.ollama_base_url,
+              minimax_base_url: form.minimax_base_url,
             })
           }
         >
@@ -171,7 +199,7 @@ function ApiKeyCard({
   configured,
   onSaved,
 }: {
-  provider: 'openai' | 'anthropic';
+  provider: 'openai' | 'anthropic' | 'minimax';
   configured: boolean;
   onSaved: () => void;
 }) {
@@ -209,7 +237,7 @@ function ApiKeyCard({
   });
 
   const envName = cloudEnvVar(provider);
-  const label = provider === 'openai' ? 'OpenAI' : 'Anthropic';
+  const label = provider === 'openai' ? 'OpenAI' : provider === 'anthropic' ? 'Anthropic' : 'MiniMax';
 
   return (
     <div className="card">

@@ -9,22 +9,38 @@ from fastapi.testclient import TestClient
 from specguard.server import create_app
 
 
+FULL_DOC = (
+    "# Product Requirements Document\n\n"
+    "## Problem\nText.\n\n## Goals\nText.\n\n## Users\nText.\n\n"
+    "## Requirements\nText.\n\n## Success Metrics\nText.\n\n## Risks and Assumptions\nText.\n"
+)
+PARTIAL_DOC = (
+    "# Product Requirements Document\n\n"
+    "## Problem\nText.\n\n## Goals\nText.\n"
+)
+
+PASS_JSON = json.dumps({"verdict": "pass", "criteria": [], "notes": "ok"})
+FAIL_JSON = json.dumps({"verdict": "needs_revision", "criteria": [], "notes": "missing sections"})
+
+
 class FakeChatModel:
+    """Routes by system message role: planner → brief, critic → JSON, writer → docs."""
+
+    def __init__(self):
+        self._critic_index = 0
+        self._critic_replies = [FAIL_JSON, PASS_JSON]
+        self._drafts = [PARTIAL_DOC, FULL_DOC]
+
     def invoke(self, messages):
-        text = messages[-1].content
-        if "Revise" in text:
-            return _ai(
-                "# PRD\n\n"
-                "## Problem\nText.\n\n"
-                "## Goals\nText.\n\n"
-                "## Users\nText.\n\n"
-                "## Requirements\nText.\n\n"
-                "## Success Metrics\nText.\n\n"
-                "## Risks and Assumptions\nText.\n"
-            )
-        if "Review" in text:
-            return _ai("missing: ## Users, ## Requirements, ## Success Metrics")
-        return _ai("# PRD\n\n## Problem\nText.\n\n## Goals\nText.\n")
+        system = messages[0].content if messages else ""
+        if "planner" in system.lower():
+            return _ai("Brief: keep it concrete.")
+        if "critic" in system.lower():
+            idx = self._critic_index
+            self._critic_index += 1
+            reply = self._critic_replies[idx] if idx < len(self._critic_replies) else self._critic_replies[-1]
+            return _ai(reply)
+        return _ai(self._drafts.pop(0) if self._drafts else FULL_DOC)
 
 
 def _ai(content: str):
@@ -61,6 +77,8 @@ def test_settings_endpoint_returns_provider_and_model(client, monkeypatch):
     assert "ollama_base_url" in body
     assert "has_openai_key" in body
     assert "has_anthropic_key" in body
+    assert "has_minimax_key" in body
+    assert "minimax_base_url" in body
 
 
 def test_settings_update_persists_to_disk(client, tmp_path):
@@ -108,6 +126,21 @@ def test_api_key_endpoint_saves_to_env(client, tmp_path, monkeypatch):
     assert r2.json()["has_openai_key"] is True
 
 
+def test_minimax_api_key_endpoint_saves_to_env(client, tmp_path, monkeypatch):
+    env_path = tmp_path / ".env"
+    monkeypatch.chdir(tmp_path)
+
+    r = client.post(
+        "/api/api-key",
+        json={"provider": "minimax", "key": "sk-minimax-1234"},
+    )
+
+    assert r.status_code == 200
+    assert r.json()["configured"] is True
+    assert "MINIMAX_API_KEY=sk-minimax-1234" in env_path.read_text(encoding="utf-8")
+    assert client.get("/api/settings").json()["has_minimax_key"] is True
+
+
 def test_api_key_clear_removes_from_env(client, tmp_path, monkeypatch):
     env_path = tmp_path / ".env"
     env_path.write_text("OPENAI_API_KEY=old-value\n", encoding="utf-8")
@@ -139,6 +172,8 @@ def test_switching_provider_snaps_model_to_default(client, tmp_path):
         assert r.json()["model"] == "gpt-4.1-mini"
         r = client.post("/api/settings", json={"provider": "anthropic"})
         assert r.json()["model"] == "claude-3-5-haiku-latest"
+        r = client.post("/api/settings", json={"provider": "minimax"})
+        assert r.json()["model"] == "MiniMax-M3"
         # And ollama snaps back to gemma4:latest.
         r = client.post("/api/settings", json={"provider": "ollama"})
         assert r.json()["model"] == "gemma4:latest"
@@ -169,18 +204,23 @@ def test_generate_endpoint_streams_sse_events(client):
 
     events = _parse_sse(r.text)
     kinds = [e["kind"] for e in events]
-    assert kinds == ["draft", "validate", "review", "revise", "validate", "save"]
+    assert kinds == [
+        "plan",
+        "attempt", "draft", "validate", "critique",
+        "attempt", "revise", "validate", "critique",
+        "save",
+    ]
     final = events[-1]
     assert final["kind"] == "save"
     assert final["validation"]["ok"] is True
-    assert final["markdown"].startswith("# PRD")
+    assert final["markdown"].startswith("# Product")
     assert final["output_path"].endswith(".md")
 
 
-def test_generate_endpoint_returns_error_event_when_validation_fails(client, tmp_path):
+def test_generate_endpoint_returns_degraded_event_when_budget_exhausted(client, tmp_path):
     class AlwaysInvalidModel:
         def invoke(self, messages):
-            return _ai("# PRD\n\n## Problem\nText.\n")
+            return _ai("# Product Requirements Document\n\n## Problem\nText.\n")
 
     app = create_app(chat_model_factory=lambda: AlwaysInvalidModel())
     c = TestClient(app)
@@ -189,7 +229,8 @@ def test_generate_endpoint_returns_error_event_when_validation_fails(client, tmp
     events = _parse_sse(r.text)
     final = events[-1]
     assert final["kind"] == "save"
-    assert final["error"] is not None
+    assert final["degraded"] is True
+    assert final["validation"]["ok"] is False
 
 
 def test_generate_endpoint_rejects_unknown_mode(client):
@@ -202,9 +243,10 @@ def test_history_endpoint_lists_saved_documents(client):
     generations succeed and BRD generations fail validation. To test the
     history endpoint we monkey-patch the server's chat model factory for the
     duration of the test so both modes produce valid outputs."""
-    from langchain_core.messages import AIMessage
 
     class ModeAwareModel:
+        """Routes by system message role: planner → brief, critic → JSON, writer → docs."""
+
         SECTIONS = {
             "prd": (
                 "## Problem", "## Goals", "## Users", "## Requirements",
@@ -220,25 +262,28 @@ def test_history_endpoint_lists_saved_documents(client):
             ),
         }
 
+        def __init__(self):
+            self._critic_replies = [json.dumps({"verdict": "pass", "criteria": [], "notes": "ok"})]
+            self._drafts = {}
+
         def invoke(self, messages):
-            # The mode is also passed in the human prompt as "Generate the document
-            # for this idea" (draft) or "_revision_prompt" (revise). Detect from any
-            # message in the batch.
+            system = messages[0].content if messages else ""
             all_text = "\n".join(m.content for m in messages if hasattr(m, "content"))
+            if "planner" in system.lower():
+                return _ai("Brief: keep it concrete.")
+            if "critic" in system.lower():
+                reply = self._critic_replies[0]
+                return _ai(reply)
+            # Writer: extract mode from prompt
             mode = None
-            if "this idea" in all_text.lower() or "revise the draft" in all_text.lower():
-                for candidate in self.SECTIONS:
-                    if candidate in all_text:
-                        mode = candidate
-                        break
-            text = messages[-1].content
-            if "Revise" in text:
-                sections = self.SECTIONS.get(mode, self.SECTIONS["prd"])
-                body = "\n\n".join(f"{s}\nText." for s in sections)
-                return AIMessage(content=f"# Document\n\n{body}\n")
-            if "Review" in text:
-                return AIMessage(content="notes")
-            return AIMessage(content="# Document\n\n## Problem\nText.\n\n## Goals\nText.\n")
+            for candidate in self.SECTIONS:
+                if candidate in all_text:
+                    mode = candidate
+                    break
+            mode = mode or "prd"
+            sections = self.SECTIONS[mode]
+            body = "\n\n".join(f"{s}\nText." for s in sections)
+            return _ai(f"# Document\n\n{body}\n")
 
     # Rebuild the app with the mode-aware model.
     from specguard import server as server_mod
@@ -280,7 +325,7 @@ def test_document_endpoint_returns_markdown(client):
     r = client.get("/api/document", params={"path": output_path})
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/markdown")
-    assert "# PRD" in r.text
+    assert "# Product" in r.text
 
 
 def _parse_sse(body: str) -> list[dict]:

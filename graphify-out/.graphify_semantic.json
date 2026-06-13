@@ -1,0 +1,252 @@
+{
+  "nodes": [
+    {
+      "id": "specguard_ai_overview",
+      "label": "SpecGuard AI: Rubric-Guided PRD Generator",
+      "file_type": "rationale",
+      "source_file": ".hermes/plans/2026-06-12_073900-specguard-ai.md",
+      "source_location": "lines 1-7"
+    },
+    {
+      "id": "specguard_multi_role_pipeline",
+      "label": "Multi-Role SLM Pipeline with Planner/Writer/Critic",
+      "file_type": "rationale",
+      "source_file": ".hermes/plans/2026-06-13_000000-multi-role-slm-pipeline-revised.md",
+      "source_location": "lines 1-7"
+    },
+    {
+      "id": "local_slm_specguard_implementation",
+      "label": "Local SLM SpecGuard Implementation Plan",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-06-12-local-slm-specguard.md"
+    },
+    {
+      "id": "multi_role_slm_implementation_plan",
+      "label": "Multi-Role SLM Pipeline Implementation Plan",
+      "file_type": "document",
+      "source_file": "docs/superpowers/plans/2026-06-12-multi-role-slm-pipeline.md"
+    },
+    {
+      "id": "local_slm_design",
+      "label": "Local SLM SpecGuard Design",
+      "file_type": "document",
+      "source_file": "docs/superpowers/specs/2026-06-12-local-slm-specguard-design.md"
+    },
+    {
+      "id": "multi_role_pipeline_design",
+      "label": "Multi-Role SLM Pipeline Design",
+      "file_type": "document",
+      "source_file": "docs/superpowers/specs/2026-06-12-multi-role-slm-pipeline-design.md"
+    },
+    {
+      "id": "monorepo_my_slm_adventures",
+      "label": "my_slm_adventures: Local SLM Experiments Monorepo",
+      "file_type": "rationale",
+      "source_file": "README.md"
+    },
+    {
+      "id": "specguard_subproject",
+      "label": "SpecGuard: Local-First PRD/BRD/Tech-Scope Generator",
+      "file_type": "document",
+      "source_file": "projects/specguard/README.md"
+    },
+    {
+      "id": "prd_standard_requirement",
+      "label": "PRD Standard with Six Required Sections",
+      "file_type": "document",
+      "source_file": "projects/specguard/src/specguard/standards/prd.md"
+    },
+    {
+      "id": "brd_standard_requirement",
+      "label": "BRD Standard with Six Required Sections",
+      "file_type": "document",
+      "source_file": "projects/specguard/src/specguard/standards/brd.md"
+    },
+    {
+      "id": "tech_scope_standard_requirement",
+      "label": "Technical Scope Standard with Six Required Sections",
+      "file_type": "document",
+      "source_file": "projects/specguard/src/specguard/standards/tech_scope.md"
+    },
+    {
+      "id": "planner_role",
+      "label": "Planner Role: Deterministic Tools + SLM Brief",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-multi-role-slm-pipeline-design.md"
+    },
+    {
+      "id": "writer_role",
+      "label": "Writer Role: Draft and Revise",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-multi-role-slm-pipeline-design.md"
+    },
+    {
+      "id": "critic_role",
+      "label": "Critic Role: Scored Rubric JSON Evaluation",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-multi-role-slm-pipeline-design.md"
+    },
+    {
+      "id": "router_decision_function",
+      "label": "Router: Pure Deterministic Decision Logic",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-multi-role-slm-pipeline-design.md"
+    },
+    {
+      "id": "llm_gateway",
+      "label": "LangChain Provider Gateway",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-local-slm-specguard-design.md"
+    },
+    {
+      "id": "ollama_default_model",
+      "label": "Ollama Default: gemma4:latest for 8GB VRAM",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-local-slm-specguard-design.md"
+    },
+    {
+      "id": "openai_provider_option",
+      "label": "OpenAI Cloud Provider Option",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-local-slm-specguard-design.md"
+    },
+    {
+      "id": "anthropic_provider_option",
+      "label": "Anthropic Cloud Provider Option",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-local-slm-specguard-design.md"
+    },
+    {
+      "id": "validator_section_checking",
+      "label": "Section Validator: Required Markdown Sections",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-local-slm-specguard-design.md"
+    },
+    {
+      "id": "clarifier_tool",
+      "label": "Clarifier Tool: Domain-Specific Questions",
+      "file_type": "rationale",
+      "source_file": ".hermes/plans/2026-06-12_073900-specguard-ai.md"
+    },
+    {
+      "id": "domain_checklist_tool",
+      "label": "Domain Checklist Tool: Context-Aware Items",
+      "file_type": "rationale",
+      "source_file": ".hermes/plans/2026-06-12_073900-specguard-ai.md"
+    },
+    {
+      "id": "scope_estimator_tool",
+      "label": "Scope Estimator Tool: Size/Team/Weeks/Risks",
+      "file_type": "rationale",
+      "source_file": ".hermes/plans/2026-06-12_073900-specguard-ai.md"
+    },
+    {
+      "id": "rubric_self_correction",
+      "label": "Rubric-Based Self-Correction Loop",
+      "file_type": "rationale",
+      "source_file": ".hermes/plans/2026-06-12_073900-specguard-ai.md"
+    },
+    {
+      "id": "degraded_draft_path",
+      "label": "Degraded Draft Path: Save with Warnings on Budget Exhaustion",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-multi-role-slm-pipeline-design.md"
+    },
+    {
+      "id": "critic_json_robustness",
+      "label": "Critic JSON Robustness Ladder: Extraction, Retry, Fallback",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-multi-role-slm-pipeline-design.md"
+    },
+    {
+      "id": "markdown_only_output",
+      "label": "Markdown-Only Output Format",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-local-slm-specguard-design.md"
+    },
+    {
+      "id": "cli_subcommands",
+      "label": "CLI Subcommands: generate, models check, serve",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-local-slm-specguard-design.md"
+    },
+    {
+      "id": "web_ui_with_sse",
+      "label": "Web UI: React + Vite with SSE Pipeline Events",
+      "file_type": "rationale",
+      "source_file": "projects/specguard/README.md"
+    },
+    {
+      "id": "config_driven_gateway",
+      "label": "Config-Driven LangChain Provider Gateway",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/plans/2026-06-12-local-slm-specguard.md"
+    },
+    {
+      "id": "monorepo_structure",
+      "label": "Monorepo: Root Docs + projects/specguard Subproject",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/plans/2026-06-12-local-slm-specguard.md"
+    },
+    {
+      "id": "agents_md",
+      "label": "AGENTS.md: Contributor Repository Guidelines",
+      "file_type": "document",
+      "source_file": "AGENTS.md"
+    },
+    {
+      "id": "python_3_11_stack",
+      "label": "Python 3.11+ Stack: uv, LangChain, pytest",
+      "file_type": "rationale",
+      "source_file": ".hermes/plans/2026-06-12_073900-specguard-ai.md"
+    },
+    {
+      "id": "retry_budget_3_attempts",
+      "label": "Retry Budget: 3 Attempts Default (SPECGUARD_MAX_ATTEMPTS)",
+      "file_type": "rationale",
+      "source_file": "docs/superpowers/specs/2026-06-12-multi-role-slm-pipeline-design.md"
+    }
+  ],
+  "edges": [
+    {"source": "specguard_ai_overview", "target": "rubric_self_correction", "relation": "conceptually_related_to", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "specguard_multi_role_pipeline", "target": "planner_role", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "specguard_multi_role_pipeline", "target": "writer_role", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "specguard_multi_role_pipeline", "target": "critic_role", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "specguard_multi_role_pipeline", "target": "router_decision_function", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "local_slm_specguard_implementation", "target": "monorepo_structure", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "local_slm_specguard_implementation", "target": "config_driven_gateway", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "local_slm_design", "target": "llm_gateway", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "llm_gateway", "target": "ollama_default_model", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "llm_gateway", "target": "openai_provider_option", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "llm_gateway", "target": "anthropic_provider_option", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "multi_role_pipeline_design", "target": "planner_role", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "multi_role_pipeline_design", "target": "writer_role", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "multi_role_pipeline_design", "target": "critic_role", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "multi_role_pipeline_design", "target": "router_decision_function", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "planner_role", "target": "clarifier_tool", "relation": "references", "confidence": "INFERRED", "confidence_score": 0.85},
+    {"source": "planner_role", "target": "domain_checklist_tool", "relation": "references", "confidence": "INFERRED", "confidence_score": 0.85},
+    {"source": "planner_role", "target": "scope_estimator_tool", "relation": "references", "confidence": "INFERRED", "confidence_score": 0.85},
+    {"source": "critic_role", "target": "critic_json_robustness", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "router_decision_function", "target": "degraded_draft_path", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "prd_standard_requirement", "target": "writer_role", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.75},
+    {"source": "brd_standard_requirement", "target": "writer_role", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.75},
+    {"source": "tech_scope_standard_requirement", "target": "writer_role", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.75},
+    {"source": "writer_role", "target": "validator_section_checking", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.85},
+    {"source": "specguard_subproject", "target": "prd_standard_requirement", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "specguard_subproject", "target": "web_ui_with_sse", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "monorepo_my_slm_adventures", "target": "specguard_subproject", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "markdown_only_output", "target": "specguard_subproject", "relation": "references", "confidence": "INFERRED", "confidence_score": 0.65},
+    {"source": "cli_subcommands", "target": "specguard_subproject", "relation": "references", "confidence": "INFERRED", "confidence_score": 0.75},
+    {"source": "retry_budget_3_attempts", "target": "router_decision_function", "relation": "references", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"source": "local_slm_specguard_implementation", "target": "multi_role_slm_implementation_plan", "relation": "conceptually_related_to", "confidence": "INFERRED", "confidence_score": 0.85},
+    {"source": "specguard_ai_overview", "target": "local_slm_specguard_implementation", "relation": "semantically_similar_to", "confidence": "INFERRED", "confidence_score": 0.75}
+  ],
+  "hyperedges": [
+    {"id": "multi_role_components", "label": "Multi-Role SLM Architecture: Planner / Writer / Critic / Router", "nodes": ["planner_role", "writer_role", "critic_role", "router_decision_function"], "relation": "form", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"id": "document_standards", "label": "Three Document Standards: PRD / BRD / Tech Scope", "nodes": ["prd_standard_requirement", "brd_standard_requirement", "tech_scope_standard_requirement"], "relation": "form", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"id": "deterministic_tools", "label": "Deterministic Tools: Clarifier / Checklist / Scope Estimator", "nodes": ["clarifier_tool", "domain_checklist_tool", "scope_estimator_tool"], "relation": "participate_in", "confidence": "EXTRACTED", "confidence_score": 1.0},
+    {"id": "provider_options", "label": "Provider Options: Ollama / OpenAI / Anthropic", "nodes": ["ollama_default_model", "openai_provider_option", "anthropic_provider_option"], "relation": "form", "confidence": "EXTRACTED", "confidence_score": 1.0}
+  ],
+  "input_tokens": 103972,
+  "output_tokens": 0
+}

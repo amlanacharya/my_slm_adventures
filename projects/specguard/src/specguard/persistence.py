@@ -24,10 +24,12 @@ class PersistedSettings:
     provider: str = "ollama"
     model: str = "gemma4:latest"
     ollama_base_url: str = "http://localhost:11434"
+    minimax_base_url: str = "https://api.minimax.io/v1"
     # API keys are *only* stored in .env. The settings.json knows which keys
     # are *set* (not the values) so the UI can show a filled/empty indicator.
     has_openai_key: bool = False
     has_anthropic_key: bool = False
+    has_minimax_key: bool = False
 
     @classmethod
     def load(cls) -> "PersistedSettings":
@@ -46,8 +48,10 @@ class PersistedSettings:
             provider=provider,
             model=str(raw.get("model", cls.model)),
             ollama_base_url=str(raw.get("ollama_base_url", cls.ollama_base_url)),
+            minimax_base_url=str(raw.get("minimax_base_url", cls.minimax_base_url)),
             has_openai_key=bool(raw.get("has_openai_key", False)),
             has_anthropic_key=bool(raw.get("has_anthropic_key", False)),
+            has_minimax_key=bool(raw.get("has_minimax_key", False)),
         )
 
     def save(self) -> None:
@@ -64,6 +68,7 @@ class PersistedSettings:
             provider=self.provider,
             model=self.model,
             ollama_base_url=self.ollama_base_url,
+            minimax_base_url=self.minimax_base_url,
         )
 
 

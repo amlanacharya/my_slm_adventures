@@ -4,9 +4,8 @@ import json
 from pathlib import Path
 
 from langchain_core.messages import AIMessage
-import pytest
 
-from specguard.pipeline import GenerationError, GenerationRequest, generate_document
+from specguard.pipeline import GenerationRequest, generate_document
 
 
 FULL_DOC = (

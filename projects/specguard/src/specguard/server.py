@@ -28,7 +28,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from .config import SUPPORTED_PROVIDERS
+from .config import DEFAULT_MODELS, SUPPORTED_PROVIDERS
 from .llm_gateway import build_chat_model
 from .persistence import (
     PersistedSettings,
@@ -53,6 +53,7 @@ def _get_persisted() -> PersistedSettings:
         # Also detect which API keys are set, so the UI can show "configured".
         s.has_openai_key = bool(read_env_var("OPENAI_API_KEY"))
         s.has_anthropic_key = bool(read_env_var("ANTHROPIC_API_KEY"))
+        s.has_minimax_key = bool(read_env_var("MINIMAX_API_KEY"))
         return s
 
 
@@ -84,19 +85,22 @@ class SettingsResponse(BaseModel):
     provider: str
     model: str
     ollama_base_url: str
+    minimax_base_url: str
     output_dir: str
     has_openai_key: bool
     has_anthropic_key: bool
+    has_minimax_key: bool
 
 
 class SettingsUpdate(BaseModel):
     provider: Optional[str] = None
     model: Optional[str] = None
     ollama_base_url: Optional[str] = None
+    minimax_base_url: Optional[str] = None
 
 
 class ApiKeyUpdate(BaseModel):
-    provider: str  # "openai" | "anthropic"
+    provider: str  # "openai" | "anthropic" | "minimax"
     key: str
     clear: bool = False  # if True, delete the key
 
@@ -139,13 +143,19 @@ class HistoryResponse(BaseModel):
 
 def _event_to_dict(event: PipelineEvent) -> dict:
     """Convert a PipelineEvent into a JSON-safe dict for SSE."""
-    d: dict = {"kind": event.kind, "timestamp": event.timestamp}
+    d: dict = {
+        "kind": event.kind,
+        "timestamp": event.timestamp,
+        "degraded": event.degraded,
+    }
     if event.tokens is not None:
         d["tokens"] = event.tokens
+    if event.attempt is not None:
+        d["attempt"] = event.attempt
     if event.validation is not None:
         d["validation"] = asdict(event.validation)
-    if event.review_notes is not None:
-        d["review_notes"] = event.review_notes
+    if event.critic is not None:
+        d["critic"] = asdict(event.critic)
     if event.markdown is not None:
         d["markdown"] = event.markdown
     if event.output_path is not None:
@@ -248,9 +258,11 @@ def create_app(
             provider=s.provider,
             model=s.model,
             ollama_base_url=s.ollama_base_url,
+            minimax_base_url=s.minimax_base_url,
             output_dir=str(_output_dir()),
             has_openai_key=s.has_openai_key,
             has_anthropic_key=s.has_anthropic_key,
+            has_minimax_key=s.has_minimax_key,
         )
 
     @app.post("/api/settings", response_model=SettingsResponse)
@@ -260,26 +272,23 @@ def create_app(
         current = _get_persisted()
         if patch.provider is not None:
             current.provider = patch.provider
-            # When switching providers, snap the model to a sensible default.
-            # The Settings dataclass field default is always gemma3:4b (for
-            # the most common case), so we compute the provider-specific
-            # default here by reading the env's per-provider override.
-            default_model = "gpt-4.1-mini" if patch.provider == "openai" else (
-                "claude-3-5-haiku-latest" if patch.provider == "anthropic" else "gemma4:latest"
-            )
-            current.model = default_model
+            current.model = DEFAULT_MODELS[patch.provider]
         if patch.model is not None:
             current.model = patch.model
         if patch.ollama_base_url is not None:
             current.ollama_base_url = patch.ollama_base_url
+        if patch.minimax_base_url is not None:
+            current.minimax_base_url = patch.minimax_base_url
         saved = _save_persisted(current)
         return SettingsResponse(
             provider=saved.provider,
             model=saved.model,
             ollama_base_url=saved.ollama_base_url,
+            minimax_base_url=saved.minimax_base_url,
             output_dir=str(_output_dir()),
             has_openai_key=saved.has_openai_key,
             has_anthropic_key=saved.has_anthropic_key,
+            has_minimax_key=saved.has_minimax_key,
         )
 
     @app.post("/api/api-key")
@@ -290,9 +299,11 @@ def create_app(
         key is never exposed to the network. Treat the saved key as
         sensitive — don't commit the resulting .env to git.
         """
-        env_name = {"openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}.get(
-            update.provider
-        )
+        env_name = {
+            "openai": "OPENAI_API_KEY",
+            "anthropic": "ANTHROPIC_API_KEY",
+            "minimax": "MINIMAX_API_KEY",
+        }.get(update.provider)
         if env_name is None:
             raise HTTPException(status_code=400, detail=f"unknown provider {update.provider!r}")
         if update.clear:

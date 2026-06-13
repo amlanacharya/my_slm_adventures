@@ -4,7 +4,7 @@ import json
 
 from langchain_core.messages import AIMessage
 
-from specguard.roles.critic import CriticVerdict, CriterionScore, critique, extract_json
+from specguard.roles.critic import CriticVerdict, critique, extract_json
 
 
 GOOD_JSON = json.dumps(
