@@ -410,6 +410,9 @@ def run_issue(
         score, reasoning = 0, ""
         passed = True
 
+        if judge == "none":
+            print(f"    [judge] skipped")
+
         if judge in ("codex", "both") and not dry_run:
             print(f"    [codex] ruff + pytest...", end=" ", flush=True)
             cx = codex_judge(rel_paths)
@@ -489,8 +492,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--issue", help="Issue number prefix (e.g. 058) or run all if omitted")
     p.add_argument("--model",    default="ornith:9b-q4",           help="Ollama model tag")
     p.add_argument("--base-url", default="http://localhost:11434/v1", help="Ollama base URL")
-    p.add_argument("--judge",    choices=["claude", "codex", "both"], default="claude",
-                   help="Reviewer: claude | codex | both  (default: claude)")
+    p.add_argument("--judge",    choices=["claude", "codex", "both", "none"], default="claude",
+                   help="Reviewer: claude | codex | both | none  (default: claude)")
     p.add_argument("--max-rounds", type=int, default=3,            help="Max rework rounds")
     p.add_argument("--dry-run",  action="store_true",              help="Show what would be written, skip disk writes")
     p.add_argument("--verbose",  "-v", action="store_true",        help="Show full judge output")
