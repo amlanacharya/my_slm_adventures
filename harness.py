@@ -156,19 +156,57 @@ def load_spec(issue: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Source context — read already-written SLM files for rework rounds
+# Codebase context — grep + glob kurma_slm/ for relevant existing code
 # ---------------------------------------------------------------------------
 
+_STOP = {
+    "with", "that", "this", "from", "have", "been", "will", "should", "must",
+    "when", "than", "only", "into", "each", "which", "their", "also",
+    "implement", "method", "class", "function", "test", "return", "none",
+    "true", "false", "list", "dict", "str", "int", "float", "bool", "any",
+}
 
-def load_prior_output(files: list[str]) -> str:
-    """On rework rounds, feed back SLM's own previous files as context."""
+
+def _symbols(issue: dict[str, Any]) -> list[str]:
+    """Extract CamelCase and snake_case identifiers from the issue text."""
+    text = f"{issue['title']} {issue.get('body', '')}"
+    # CamelCase class names + snake_case identifiers, min 4 chars
+    words = re.findall(r'\b[A-Z][a-zA-Z]{3,}\b|\b[a-z_][a-z_]{3,}\b', text)
+    return [w for w in words if w.lower() not in _STOP][:40]
+
+
+def gather_codebase_context(issue: dict[str, Any], priority_files: list[str] | None = None) -> str:
+    """
+    Glob all .py files in kurma_slm/, grep them for symbols from the issue,
+    return the top-3 most relevant as code snippets.
+    Priority files (from prior round) always rank first.
+    """
+    py_files = list(OUTPUT_DIR.rglob("*.py"))
+    if not py_files:
+        return ""
+
+    symbols = _symbols(issue)
+    priority = set(priority_files or [])
+
+    scored: list[tuple[int, Path, str]] = []
+    for f in py_files:
+        try:
+            content = f.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        rel = str(f.relative_to(OUTPUT_DIR))
+        score = (20 if rel in priority else 0) + sum(
+            content.count(sym) for sym in symbols
+        )
+        if score > 0:
+            scored.append((score, f, content))
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+
     parts: list[str] = []
     total = 0
-    for rel in files:
-        path = OUTPUT_DIR / rel
-        if not path.exists():
-            continue
-        content = path.read_text(encoding="utf-8")
+    for _, f, content in scored[:4]:
+        rel = str(f.relative_to(OUTPUT_DIR))
         if len(content) > MAX_FILE_CHARS:
             content = content[:MAX_FILE_CHARS] + "\n... (truncated)"
         snippet = f"### {rel}\n```python\n{content}\n```"
@@ -176,6 +214,7 @@ def load_prior_output(files: list[str]) -> str:
             break
         parts.append(snippet)
         total += len(snippet)
+
     return "\n\n".join(parts)
 
 
@@ -249,6 +288,7 @@ def build_messages(
 ) -> list[dict[str, str]]:
     prd_block  = f"## Relevant PRD sections\n\n{prd_context}\n\n---\n\n" if prd_context else ""
     spec_block = f"## Implementation spec (exact interfaces, test examples, file paths)\n\n{spec_context}\n\n---\n\n" if spec_context else ""
+    src_block  = f"## Existing code in kurma_slm/ (grepped for relevant symbols)\n\n{source_context}\n\n---\n\n" if source_context else ""
 
     if previous is None:
         user = (
@@ -256,6 +296,7 @@ def build_messages(
             f"{issue['body']}\n\n---\n\n"
             f"{prd_block}"
             f"{spec_block}"
+            f"{src_block}"
         )
     else:
         files = "\n".join(f"  - {p}" for p in previous["files"])
@@ -277,7 +318,7 @@ def build_messages(
             f"{missing_block}"
             f"### Acceptance criteria\n{extract_acceptance_criteria(issue['body'])}\n\n"
             f"---\n\n"
-            f"## Your previous files (current state)\n\n{source_context}"
+            f"## Current state of kurma_slm/ (grepped for relevant symbols)\n\n{source_context}"
         )
 
     return [
@@ -417,7 +458,10 @@ def run_issue(
     for round_n in range(1, max_rounds + 1):
         print(f"\n  Round {round_n}/{max_rounds}")
 
-        source_ctx = load_prior_output(previous["files"]) if previous else ""
+        prior_files = [p for p in (previous or {}).get("files", [])]
+        source_ctx = gather_codebase_context(issue, priority_files=prior_files)
+        if source_ctx:
+            print(f"    [grep] found {source_ctx.count('###')} relevant file(s) in kurma_slm/")
         messages = build_messages(issue, prd_context, spec_context, source_ctx, previous)
 
         print(f"    [ornith] generating...", flush=True)
