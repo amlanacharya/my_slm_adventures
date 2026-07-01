@@ -40,9 +40,11 @@ import httpx
 ROOT        = Path(__file__).resolve().parent
 ISSUES_DIR  = ROOT / "issues"
 PRD_PATH    = ROOT / "prd.md"
+PLANS_DIR   = ROOT / "docs" / "superpowers" / "plans"
 OUTPUT_DIR  = ROOT / "kurma_slm"   # SLM writes all generated files here
 
 MAX_PRD_CHARS    = 4_000
+MAX_SPEC_CHARS   = 6_000
 MAX_FILE_CHARS   = 2_000
 MAX_CONTEXT_CHARS = 8_000
 
@@ -127,6 +129,30 @@ def load_prd(issue: dict[str, Any]) -> str:
 
     extracted = "\n\n".join("\n".join(s) for s in sections)
     return (extracted or text)[:MAX_PRD_CHARS]
+
+
+# ---------------------------------------------------------------------------
+# Spec — extract the matching Task section from the plan doc
+# ---------------------------------------------------------------------------
+
+
+def load_spec(issue: dict[str, Any]) -> str:
+    """Extract the Task NNN section from the most recent plan doc for this issue number."""
+    plans = sorted(PLANS_DIR.glob("*.md"), reverse=True)
+    if not plans:
+        return ""
+    text = plans[0].read_text(encoding="utf-8")
+    num = issue["number"].lstrip("0") or "0"   # "001" -> "1", "013" -> "13"
+
+    # Match "## Task 001:" or "## Task 1:"
+    pattern = re.compile(
+        rf"^##\s+Task\s+0*{re.escape(num)}\b.*?(?=^##\s+Task\s+|\Z)",
+        re.MULTILINE | re.DOTALL,
+    )
+    m = pattern.search(text)
+    if not m:
+        return ""
+    return m.group(0).strip()[:MAX_SPEC_CHARS]
 
 
 # ---------------------------------------------------------------------------
@@ -217,16 +243,19 @@ Respond with a JSON object ONLY (no markdown fences, no prose):
 def build_messages(
     issue: dict[str, Any],
     prd_context: str,
+    spec_context: str,
     source_context: str,
     previous: dict[str, Any] | None,
 ) -> list[dict[str, str]]:
-    prd_block = f"## Relevant PRD sections\n\n{prd_context}\n\n---\n\n" if prd_context else ""
+    prd_block  = f"## Relevant PRD sections\n\n{prd_context}\n\n---\n\n" if prd_context else ""
+    spec_block = f"## Implementation spec (exact interfaces, test examples, file paths)\n\n{spec_context}\n\n---\n\n" if spec_context else ""
 
     if previous is None:
         user = (
             f"## Issue {issue['number']}: {issue['title']}\n\n"
             f"{issue['body']}\n\n---\n\n"
             f"{prd_block}"
+            f"{spec_block}"
         )
     else:
         files = "\n".join(f"  - {p}" for p in previous["files"])
@@ -378,7 +407,10 @@ def run_issue(
     print(f"\n{'='*60}")
     print(f"Issue {issue['number']}: {issue['title']}")
 
-    prd_context = load_prd(issue)
+    prd_context  = load_prd(issue)
+    spec_context = load_spec(issue)
+    if spec_context:
+        print(f"  spec     : {len(spec_context)} chars from plan doc")
     previous: dict[str, Any] | None = None
     result: dict[str, Any] = {}
 
@@ -386,7 +418,7 @@ def run_issue(
         print(f"\n  Round {round_n}/{max_rounds}")
 
         source_ctx = load_prior_output(previous["files"]) if previous else ""
-        messages = build_messages(issue, prd_context, source_ctx, previous)
+        messages = build_messages(issue, prd_context, spec_context, source_ctx, previous)
 
         print(f"    [ornith] generating...", flush=True)
         try:
